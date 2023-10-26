@@ -1,14 +1,10 @@
 import Matter, { World } from 'matter-js';
 
-type CategoryKeys = 'red' | 'green' | 'blue';
-
 interface Category {
   color: string;
   radius: number;
   categoryBit: number;
 }
-
-type Categories = Record<CategoryKeys, Category>;
 
 const Home = () => {
   const mainFunc = () => {
@@ -41,22 +37,57 @@ const Home = () => {
 
     const defaultCategory = 0x0001;
 
-    const categories: Categories = {
-      red: {
+    const categories: Category[] = [
+      {
         categoryBit: 0x0002,
         radius: 10,
         color: '#FF0000',
       },
-      green: {
+      {
         categoryBit: 0x0004,
+        radius: 15,
+        color: '#FFA500',
+      },
+      {
+        categoryBit: 0x0008,
         radius: 20,
+        color: '#FFFF00',
+      },
+      {
+        categoryBit: 0x0010,
+        radius: 25,
         color: '#00FF00',
       },
-      blue: {
-        categoryBit: 0x0008,
+      {
+        categoryBit: 0x0020,
         radius: 30,
         color: '#0000FF',
       },
+      {
+        categoryBit: 0x0040,
+        radius: 35,
+        color: '#4B0082',
+      },
+      {
+        categoryBit: 0x0080,
+        radius: 40,
+        color: '#EE82EE',
+      },
+      {
+        categoryBit: 0x0100,
+        radius: 45,
+        color: '#FFC0CB',
+      },
+    ];
+
+    const getNextCategory = (currentCategoryBit: number) => {
+      const currentIndex = categories.findIndex(
+        (category) => category.categoryBit === currentCategoryBit
+      );
+      if (currentIndex === -1) return categories[0];
+
+      const nextIndex = (currentIndex + 1) % categories.length;
+      return categories[nextIndex];
     };
 
     Composite.add(
@@ -70,12 +101,37 @@ const Home = () => {
       })
     );
 
+    Composite.add(
+      world,
+      Bodies.rectangle(0, 300, 50, 600, {
+        collisionFilter: {
+          category: defaultCategory,
+        },
+        isStatic: true,
+        render: { fillStyle: 'transparent', lineWidth: 1 },
+      })
+    );
+
+    Composite.add(
+      world,
+      Bodies.rectangle(800, 300, 50, 600, {
+        collisionFilter: {
+          category: defaultCategory,
+        },
+        isStatic: true,
+        render: { fillStyle: 'transparent', lineWidth: 1 },
+      })
+    );
+
     const createBall = (x: number, y: number, category: Category) => {
       Composite.add(
         world,
         Bodies.circle(x, y, category.radius, {
           collisionFilter: {
-            mask: defaultCategory || category.categoryBit,
+            category: category.categoryBit,
+            mask:
+              defaultCategory |
+              categories.map((category) => category.categoryBit).reduce((a, b) => a | b),
           },
           render: {
             fillStyle: category.color,
@@ -101,36 +157,29 @@ const Home = () => {
 
     Events.on(mouseConstraint, 'mousedown', (event: any) => {
       const mousePosition = event.mouse.position;
-      const random = Math.floor(Math.random() * 3);
-      if (random === 0) {
-        createBall(mousePosition.x, 10, categories.red);
-      } else if (random === 1) {
-        createBall(mousePosition.x, 10, categories.green);
-      } else {
-        createBall(mousePosition.x, 10, categories.blue);
-      }
+      const random = Math.floor(Math.random() * 8);
+      const category = categories[random];
+      createBall(mousePosition.x, mousePosition.y, category);
     });
 
     render.mouse = mouse;
 
     Events.on(engine, 'collisionStart', (event) => {
       event.pairs.forEach((pair) => {
-        console.log(pair.bodyA.collisionFilter.category?.toString(2));
         const { bodyA, bodyB } = pair;
 
         if (
           bodyA.collisionFilter.category !== defaultCategory &&
           bodyB.collisionFilter.category !== defaultCategory
         ) {
-          console.log(bodyA.collisionFilter.category?.toString(2));
-          console.log(bodyB.collisionFilter.category?.toString(2));
           if (bodyA.collisionFilter.category === bodyB.collisionFilter.category) {
             World.remove(world, bodyA);
             World.remove(world, bodyB);
 
             const x = (bodyA.position.x + bodyB.position.x) / 2;
             const y = (bodyA.position.y + bodyB.position.y) / 2;
-            createBall(x, y, categories.blue);
+            const nextCategory = getNextCategory(bodyA.collisionFilter.category!);
+            createBall(x, y, nextCategory);
           }
         }
       });
@@ -147,8 +196,8 @@ const Home = () => {
 
   return (
     <div>
-      <h1>My Next.js app with Matter.js</h1>
-      <button onClick={mainFunc}>Click Me</button>
+      <h1>スイカゲーム</h1>
+      <button onClick={mainFunc}>ゲームをプレイ</button>
     </div>
   );
 };
