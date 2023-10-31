@@ -1,14 +1,47 @@
-import Matter, { World } from 'matter-js';
-
-interface Category {
-  color: string;
-  radius: number;
-  categoryBit: number;
-}
+import Matter, { Bodies, Composite, Events, World } from 'matter-js';
+import { useEffect, useRef, useState } from 'react';
+import { categories } from '../utils/categories';
+import type { Category, MyMouseEvent } from '../utils/types';
 
 const Home = () => {
-  const mainFunc = () => {
-    // Matter.jsの設定と初期化
+  const [readyCategory, setReadyCategory] = useState<Category>(categories[0]);
+  const engineRef = useRef<Matter.Engine | null>(null);
+  const worldRef = useRef<Matter.World | null>(null);
+  const mouseConstraintRef = useRef<Matter.MouseConstraint | null>(null);
+  const renderDivRef = useRef<HTMLDivElement | null>(null);
+
+  const defaultCategory = 0x0001;
+  const limitCategory = 0x0003;
+
+  const getNextCategory = (currentCategoryBit: number) => {
+    const currentIndex = categories.findIndex(
+      (category) => category.categoryBit === currentCategoryBit
+    );
+    if (currentIndex === -1) return categories[0];
+
+    const nextIndex = (currentIndex + 1) % categories.length;
+    return categories[nextIndex];
+  };
+
+  const createBall = (x: number, y: number, category: Category) => {
+    if (!worldRef.current) return; // worldがnullまたはundefinedの場合は何もしない
+    Composite.add(
+      worldRef.current,
+      Bodies.circle(x, y, category.radius, {
+        collisionFilter: {
+          category: category.categoryBit,
+          mask:
+            defaultCategory |
+            categories.map((category) => category.categoryBit).reduce((a, b) => a | b),
+        },
+        render: {
+          fillStyle: category.color,
+        },
+      })
+    );
+  };
+
+  useEffect(() => {
     const Engine = Matter.Engine,
       Render = Matter.Render,
       Composite = Matter.Composite,
@@ -17,82 +50,53 @@ const Home = () => {
       Events = Matter.Events,
       Bodies = Matter.Bodies;
 
-    const engine = Engine.create(),
-      world = engine.world;
+    const engine = Engine.create();
+    engineRef.current = engine;
+    worldRef.current = engine.world;
 
-    const render = Render.create({
-      element: document.body,
-      engine,
-      options: {
-        width: 800,
-        height: 600,
-        wireframes: false,
-      },
-    });
+    const windowWidth = window.innerWidth;
+    const windowHeight = window.innerHeight;
 
+    const currentRenderDiv = renderDivRef.current;
+
+    let render: Matter.Render | null = null;
+
+    if (renderDivRef.current) {
+      render = Render.create({
+        element: renderDivRef.current,
+        engine,
+        options: {
+          width: windowWidth,
+          height: windowHeight,
+          wireframes: false,
+        },
+      });
+    }
+    if (!render) return;
     Render.run(render);
 
     const runner = Matter.Runner.create();
     Matter.Runner.run(runner, engine);
 
-    const defaultCategory = 0x0001;
+    //x,y,width,height,options
 
-    const categories: Category[] = [
-      {
-        categoryBit: 0x0002,
-        radius: 10,
-        color: '#FF0000',
-      },
-      {
-        categoryBit: 0x0004,
-        radius: 15,
-        color: '#FFA500',
-      },
-      {
-        categoryBit: 0x0008,
-        radius: 20,
-        color: '#FFFF00',
-      },
-      {
-        categoryBit: 0x0010,
-        radius: 25,
-        color: '#00FF00',
-      },
-      {
-        categoryBit: 0x0020,
-        radius: 30,
-        color: '#0000FF',
-      },
-      {
-        categoryBit: 0x0040,
-        radius: 35,
-        color: '#4B0082',
-      },
-      {
-        categoryBit: 0x0080,
-        radius: 40,
-        color: '#EE82EE',
-      },
-      {
-        categoryBit: 0x0100,
-        radius: 45,
-        color: '#FFC0CB',
-      },
-    ];
-
-    const getNextCategory = (currentCategoryBit: number) => {
-      const currentIndex = categories.findIndex(
-        (category) => category.categoryBit === currentCategoryBit
-      );
-      if (currentIndex === -1) return categories[0];
-
-      const nextIndex = (currentIndex + 1) % categories.length;
-      return categories[nextIndex];
-    };
-
+    //床
     Composite.add(
-      world,
-      Bodies.rectangle(400, 600, 900, 50, {
+      worldRef.current,
+      Bodies.rectangle(windowWidth / 2, windowHeight - 10, windowWidth, 10, {
+        collisionFilter: {
+          category: defaultCategory,
+          mask: categories.map((category) => category.categoryBit).reduce((a, b) => a | b),
+        },
+        isStatic: true,
+        render: { fillStyle: 'red', lineWidth: 1 },
+      })
+    );
+
+    // 左壁
+    Composite.add(
+      worldRef.current,
+      Bodies.rectangle(5, windowHeight / 2, 10, windowHeight, {
         collisionFilter: {
           category: defaultCategory,
         },
@@ -101,9 +105,10 @@ const Home = () => {
       })
     );
 
+    // 右壁
     Composite.add(
-      world,
-      Bodies.rectangle(0, 300, 50, 600, {
+      worldRef.current,
+      Bodies.rectangle(windowWidth - 5, windowHeight / 2, 10, windowHeight, {
         collisionFilter: {
           category: defaultCategory,
         },
@@ -112,33 +117,17 @@ const Home = () => {
       })
     );
 
+    // 天井
     Composite.add(
-      world,
-      Bodies.rectangle(800, 300, 50, 600, {
+      worldRef.current,
+      Bodies.rectangle(windowWidth / 2, 5, windowWidth, 10, {
         collisionFilter: {
-          category: defaultCategory,
+          category: limitCategory,
         },
         isStatic: true,
         render: { fillStyle: 'transparent', lineWidth: 1 },
       })
     );
-
-    const createBall = (x: number, y: number, category: Category) => {
-      Composite.add(
-        world,
-        Bodies.circle(x, y, category.radius, {
-          collisionFilter: {
-            category: category.categoryBit,
-            mask:
-              defaultCategory |
-              categories.map((category) => category.categoryBit).reduce((a, b) => a | b),
-          },
-          render: {
-            fillStyle: category.color,
-          },
-        })
-      );
-    };
 
     const mouse = Mouse.create(render.canvas);
     const mouseConstraint = MouseConstraint.create(engine, {
@@ -153,16 +142,8 @@ const Home = () => {
         category: 0x0000,
       },
     });
-    Composite.add(world, mouseConstraint);
-
-    Events.on(mouseConstraint, 'mousedown', (event: any) => {
-      const mousePosition = event.mouse.position;
-      const random = Math.floor(Math.random() * 8);
-      const category = categories[random];
-      createBall(mousePosition.x, mousePosition.y, category);
-    });
-
-    render.mouse = mouse;
+    Composite.add(worldRef.current, mouseConstraint);
+    mouseConstraintRef.current = mouseConstraint;
 
     Events.on(engine, 'collisionStart', (event) => {
       event.pairs.forEach((pair) => {
@@ -173,31 +154,75 @@ const Home = () => {
           bodyB.collisionFilter.category !== defaultCategory
         ) {
           if (bodyA.collisionFilter.category === bodyB.collisionFilter.category) {
-            World.remove(world, bodyA);
-            World.remove(world, bodyB);
+            if (worldRef.current) {
+              World.remove(worldRef.current, bodyA);
+              World.remove(worldRef.current, bodyB);
+            }
 
             const x = (bodyA.position.x + bodyB.position.x) / 2;
             const y = (bodyA.position.y + bodyB.position.y) / 2;
-            const nextCategory = getNextCategory(bodyA.collisionFilter.category!);
-            createBall(x, y, nextCategory);
+            if (bodyA.collisionFilter.category !== undefined) {
+              const nextCategory = getNextCategory(bodyA.collisionFilter.category);
+              createBall(x, y, nextCategory);
+            }
           }
+        }
+      });
+    });
+
+    Events.on(engine, 'collisionActive', (event) => {
+      event.pairs.forEach((pair) => {
+        const { bodyA, bodyB } = pair;
+
+        if (
+          bodyA.collisionFilter.category === limitCategory ||
+          bodyB.collisionFilter.category === limitCategory
+        ) {
+          console.log('game over');
         }
       });
     });
 
     Render.lookAt(render, {
       min: { x: 0, y: 0 },
-      max: { x: 800, y: 600 },
+      max: { x: windowWidth, y: windowHeight },
     });
 
     Engine.run(engine);
     Render.run(render);
-  };
 
+    return () => {
+      if (!render) return;
+      Render.stop(render);
+      Matter.Runner.stop(runner);
+      if (currentRenderDiv) {
+        currentRenderDiv.innerHTML = '';
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const currentMouseConstraint = mouseConstraintRef.current;
+
+    const mouseDownFunc = (event: MyMouseEvent) => {
+      const mousePosition = event.mouse.position;
+      createBall(mousePosition.x, 100, readyCategory);
+      const random = Math.floor(Math.random() * 8);
+      setReadyCategory(categories[random]);
+    };
+    if (currentMouseConstraint) {
+      Events.on(currentMouseConstraint, 'mousedown', mouseDownFunc);
+    }
+
+    return () => {
+      if (currentMouseConstraint) {
+        Events.off(currentMouseConstraint, 'mousedown', mouseDownFunc);
+      }
+    };
+  }, [readyCategory]);
   return (
     <div>
-      <h1>スイカゲーム</h1>
-      <button onClick={mainFunc}>ゲームをプレイ</button>
+      <div ref={renderDivRef} />
     </div>
   );
 };
